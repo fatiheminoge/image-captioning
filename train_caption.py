@@ -2,6 +2,11 @@ import pickle
 
 import keras
 import numpy as np
+from nltk.translate.bleu_score import corpus_bleu,SmoothingFunction
+
+import tensorflow as tf
+physical_devices = tf.config.list_physical_devices('GPU') 
+tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
 def load_doc(filename):
     with open(filename,'r') as f:
@@ -28,7 +33,7 @@ def load_clean_descriptions(filename,dataset):
         if image_id in dataset:
             if image_id not in descriptions:
                 descriptions[image_id] = list()
-            desc = 'startseq' + ' '.join(image_desc) + ' endseq'
+            desc = 'startseq ' + ' '.join(image_desc) + ' endseq'
             descriptions[image_id].append(desc)
     return descriptions
 
@@ -48,6 +53,10 @@ def create_tokenizer(descriptions):
     tokenizer = keras.preprocessing.text.Tokenizer()
     tokenizer.fit_on_texts(lines)
     return tokenizer
+    
+def max_length(descriptions):
+    lines = to_lines(descriptions)
+    return max(len(d.split()) for d in lines)
 
 def create_sequences(tokenizer,max_len,descriptions,photos,vocab_size):
     X1,X2,y = list(),list(),list()
@@ -64,10 +73,6 @@ def create_sequences(tokenizer,max_len,descriptions,photos,vocab_size):
                 X2.append(in_seq)
                 y.append(out_seq)
         return np.array(X1),np.array(X2),np.array(y)
-
-def max_length(descriptions):
-    lines = to_lines(descriptions)
-    return max(len(d.split()) for d in lines)
 
 def define_model(vocab_size,max_length):
     inputs1 = keras.layers.Input(shape=(4096,))
@@ -90,6 +95,48 @@ def define_model(vocab_size,max_length):
  #   keras.utils.plot_model(model, to_file='model.png',show_shapes=True)
     return model
 
+##############################################
+
+def word_for_id(integer,tokenizer):
+    for word,index in tokenizer.word_index.items():
+        if index == integer:
+            return word
+    return None
+
+def generate_desc(model, tokenizer, photo, max_length):
+    in_text = 'startseq'
+
+    for i in range(max_length):
+        sequence = tokenizer.texts_to_sequences([in_text])[0]
+        sequence = keras.preprocessing.sequence.pad_sequences([sequence],maxlen=max_length)
+        yhat = model.predict([photo,sequence],verbose=0)
+        yhat = np.argmax(yhat)
+
+        word = word_for_id(yhat,tokenizer)
+        if word is None:
+            break
+        
+        in_text += ' ' + word
+        if word=='endseq':
+            break
+    return in_text
+
+def evaluate_model(model, descriptions, photos, tokenizer, max_length):
+    actual,predicted = list(),list()
+
+    for key,desc_list in descriptions.items():
+        yhat = generate_desc(model,tokenizer,photos[key],max_length)
+        references = [d.split() for d in desc_list]
+        actual.append(references)
+        predicted.append(yhat.split())
+    
+    cc = SmoothingFunction()
+    print('BLEU-1: %f' % corpus_bleu(actual,predicted,weights=(1.0,0,0,0),smoothing_function=cc.method3))
+    print('BLEU-1: %f' % corpus_bleu(actual,predicted,weights=(0.5,0.5,0,0),smoothing_function=cc.method3))
+    print('BLEU-1: %f' % corpus_bleu(actual,predicted,weights=(0.3,0.3,0.3,0),smoothing_function=cc.method3))
+    print('BLEU-1: %f' % corpus_bleu(actual,predicted,weights=(0.25,0.25,0.25,0.25),smoothing_function=cc.method3))
+
+
 filename = 'Flicker8k_text/Flickr_8k.trainImages.txt'
 train = load_set(filename)
 print('Dataset: %d' % len(train))
@@ -109,12 +156,14 @@ print('Max Length: %d' % max_length)
 
 X1train, X2train, ytrain = create_sequences(tokenizer, max_length, train_descriptions, train_features, vocab_size)
 
+###################################################
+
 filename = 'Flicker8k_text/Flickr_8k.devImages.txt'
 test = load_set(filename)
 print('Dataset: %d' % len(test))
 
 test_descriptions = load_clean_descriptions('descriptions.txt',test)
-print('Descriptions: test=%d' % len(train_descriptions))
+print('Descriptions: test=%d' % len(test_descriptions))
 
 test_features = load_photo_features('features.pkl',test)
 print('Photos: test=%d' % len(test_features))
@@ -125,6 +174,9 @@ model = define_model(vocab_size,max_length)
 filepath = 'models/model-ep{epoch:03d}-loss{loss:.3f}-val_loss{val_loss:.3f}.h5'
 checkpoint = keras.callbacks.ModelCheckpoint(filepath,monitor='val_loss',verbose=1,save_best_only=True,mode='min')
 
-
 model.fit([X1train, X2train],ytrain, epochs=20, verbose=2, callbacks=[checkpoint], validation_data=([X1test,X2test],ytest))
-    
+
+filename = 'models\model-ep016-loss3.095-val_loss7.944.h5'
+model = keras.models.load_model(filename)
+
+evaluate_model(model,test_descriptions,test_features,tokenizer,max_length)
