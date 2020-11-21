@@ -3,6 +3,11 @@ import pickle
 import keras
 import pickle
 
+import os
+os.environ['TF_CPP_VMODULE'] = '2' 
+os.environ['asm_compiler'] = '2' 
+import tensorflow as tf
+
 def extract_features(dir):
     model = keras.applications.VGG16()
     model = keras.models.Model(inputs=model.inputs, outputs=model.layers[-2].output)

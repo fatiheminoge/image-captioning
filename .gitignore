@@ -1,8 +1,9 @@
 /docs
-/Flicker8k_Dataset
-/Flicker8k_text
+/Flickr8k_Dataset
+/Flickr8k_text
 /descriptions.txt
 /features.pkl
 /models
 /.vscode
 /tokenizer.pkl
+/example.jpg

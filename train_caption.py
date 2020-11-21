@@ -4,9 +4,17 @@ import keras
 import numpy as np
 from nltk.translate.bleu_score import corpus_bleu,SmoothingFunction
 
+"""
+Tf was giving an error because it couldn't find the driver these line are for fixing it
 import tensorflow as tf
 physical_devices = tf.config.list_physical_devices('GPU') 
 tf.config.experimental.set_memory_growth(physical_devices[0], True)
+
+import os
+os.environ['TF_CPP_VMODULE'] = '2' 
+os.environ['asm_compiler'] = '2' """
+
+
 
 def load_doc(filename):
     with open(filename,'r') as f:
@@ -72,7 +80,7 @@ def create_sequences(tokenizer,max_len,descriptions,photos,vocab_size):
                 X1.append(photos[key][0])
                 X2.append(in_seq)
                 y.append(out_seq)
-        return np.array(X1),np.array(X2),np.array(y)
+    return np.array(X1),np.array(X2),np.array(y)
 
 def define_model(vocab_size,max_length):
     inputs1 = keras.layers.Input(shape=(4096,))
@@ -137,7 +145,7 @@ def evaluate_model(model, descriptions, photos, tokenizer, max_length):
     print('BLEU-1: %f' % corpus_bleu(actual,predicted,weights=(0.25,0.25,0.25,0.25),smoothing_function=cc.method3))
 
 
-filename = 'Flicker8k_text/Flickr_8k.trainImages.txt'
+filename = 'Flickr8k_text/Flickr_8k.trainImages.txt'
 train = load_set(filename)
 print('Dataset: %d' % len(train))
 
@@ -158,7 +166,7 @@ X1train, X2train, ytrain = create_sequences(tokenizer, max_length, train_descrip
 
 ###################################################
 
-filename = 'Flicker8k_text/Flickr_8k.devImages.txt'
+filename = 'Flickr8k_text/Flickr_8k.devImages.txt'
 test = load_set(filename)
 print('Dataset: %d' % len(test))
 
@@ -174,9 +182,9 @@ model = define_model(vocab_size,max_length)
 filepath = 'models/model-ep{epoch:03d}-loss{loss:.3f}-val_loss{val_loss:.3f}.h5'
 checkpoint = keras.callbacks.ModelCheckpoint(filepath,monitor='val_loss',verbose=1,save_best_only=True,mode='min')
 
-model.fit([X1train, X2train],ytrain, epochs=20, verbose=2, callbacks=[checkpoint], validation_data=([X1test,X2test],ytest))
+# model.fit([X1train, X2train],ytrain, epochs=2, verbose=2, callbacks=[checkpoint], validation_data=([X1test,X2test],ytest))
 
-filename = 'models\model-ep016-loss3.095-val_loss7.944.h5'
+filename = 'models\model-ep002-loss3.865-val_loss3.945.h5'
 model = keras.models.load_model(filename)
 
 evaluate_model(model,test_descriptions,test_features,tokenizer,max_length)
