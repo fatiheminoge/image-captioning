@@ -2,15 +2,14 @@ import pickle
 import keras
 import numpy as np
 
-"""
-Tf was giving an error because it couldn't find the driver these line are for fixing it
 import tensorflow as tf
 physical_devices = tf.config.list_physical_devices('GPU') 
-tf.config.experimental.set_memory_growth(physical_devices[0], True)
+config = tf.compat.v1.ConfigProto()
+config.gpu_options.allow_growth = True
 
 import os
 os.environ['TF_CPP_VMODULE'] = '2' 
-os.environ['asm_compiler'] = '2' """
+os.environ['asm_compiler'] = '2' 
 
 def extract_features(filename):
     model = keras.applications.VGG16()
@@ -53,11 +52,13 @@ def generate_desc(model, tokenizer, photo, max_length):
     
     return in_text
 
-tokenizer = pickle.load(open('tokenizer.pkl','rb'))
-max_length = 34
+def imgPrediction(filepath):
+    tokenizer = pickle.load(open('tokenizer.pkl','rb'))
+    max_length = 34
 
-model = keras.models.load_model('models\model-ep002-loss3.865-val_loss3.945.h5')
-photo = extract_features('example.jpg')
+    model = keras.models.load_model('models\model-ep002-loss3.865-val_loss3.945.h5')
+    photo = extract_features(filepath)
 
-description = generate_desc(model,tokenizer,photo,max_length)
-print(' '.join([w for w in description.split()[1:-1]]))
+    description = generate_desc(model,tokenizer,photo,max_length)
+    description = ' '.join([w for w in description.split()[1:-1]])
+    return description
